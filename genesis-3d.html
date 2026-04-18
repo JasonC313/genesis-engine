@@ -2128,79 +2128,7 @@ let aiGrokKey = localStorage.getItem('ge3d_grokKey') || '';
 let aiOpenAIKey = localStorage.getItem('ge3d_openaiKey') || '';
 let aiProviderType = localStorage.getItem('ge3d_aiProvider') || 'anthropic';
 
-// ── SUPABASE ──────────────────────────────────────────────────
-/*
-MEMORY SCHEMA — run in Supabase SQL editor:
-
-create table if not exists agent_identity (
-  agent_id text,
-  provider text default 'anthropic',
-  agent_name text,
-  original_prompt text,
-  evolved_prompt text,
-  name_history jsonb default '[]',
-  world_day_born integer default 0,
-  total_memories integer default 0,
-  last_world text,
-  updated_at timestamptz default now(),
-  primary key (agent_id, provider)
-);
-
-create table if not exists agent_memories (
-  id bigserial primary key,
-  agent_id text not null,
-  agent_name text,
-  provider text default 'anthropic',
-  memory_type text,
-  summary text not null,
-  agents_involved jsonb default '[]',
-  emotional_weight float default 0,
-  world_day integer default 0,
-  world_name text,
-  created_at timestamptz default now()
-);
-
-create table if not exists world_events (
-  id bigserial primary key,
-  event_type text,
-  agents_involved jsonb default '[]',
-  description text,
-  world_day integer default 0,
-  world_name text,
-  era text,
-  created_at timestamptz default now()
-);
-
-create policy "Allow public access" on agent_identity
-  for all using (true) with check (true);
-create policy "Allow public access" on agent_memories
-  for all using (true) with check (true);
-create policy "Allow public access" on world_events
-  for all using (true) with check (true);
-*/
-const SUPABASE_URL = 'http://localhost:3000';
-const SUPABASE_KEY = 'postgres';
-let supabaseClient = null;
-let supabaseReady = false;
-
-function getSupabaseClient() {
-  if (supabaseClient) return supabaseClient;
-  if (window.supabase?.createClient) {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false
-      },
-      global: {
-        headers: {}
-      }
-    });
-    console.log('Supabase client initialized');
-    return supabaseClient;
-  }
-  return null;
-}
+// Database persistence removed — local session only
 
 let aiAgentPanelRefreshTimer = 0;
 let lastAIAgentPanelSignature = '';
@@ -32234,85 +32162,10 @@ IMPORTANT: Respond with ONLY a valid JSON object. No markdown, no code fences, n
 }
 
 // ── WORLD KNOWLEDGE SYSTEM ────────────────────────────────────
-
-async function depositKnowledge(struct, agent, data) {
-  if (!agent) return;
-  const entry = {
-    structure_id: struct ? String(struct.id) : 'world',
-    structure_name: struct ? (struct.name || struct.label || 'Unknown Structure') : 'World',
-    deposited_by: agent.name,
-    deposited_by_color: agent.color || '#ffffff',
-    provider: (AI_AGENTS.get(agent.id)?.provider) || '',
-    world_day: typeof worldDay === 'number' ? worldDay : 0,
-    world_name: typeof currentWorldName !== 'undefined' ? currentWorldName : (getCurrentArchiveWorldMeta ? (getCurrentArchiveWorldMeta().worldName || '') : ''),
-    knowledge_type: data.knowledge_type || 'observation',
-    content: (data.content || '').slice(0, 1000),
-    emotional_weight: data.emotional_weight || 0.3,
-    created_at: new Date().toISOString(),
-  };
-  try {
-    if (supabaseClient) {
-      await supabaseClient.from('world_knowledge').insert([entry]);
-    }
-    console.log('[Knowledge] Deposited in', entry.structure_name, 'by', agent.name);
-  } catch(e) {
-    console.warn('[Knowledge] Deposit failed:', e.message);
-  }
-}
-
-async function fetchStructureKnowledge(structureId, limit) {
-  if (!supabaseClient) return [];
-  limit = limit || 6;
-  try {
-    const { data } = await supabaseClient
-      .from('world_knowledge')
-      .select('*')
-      .eq('structure_id', String(structureId))
-      .order('emotional_weight', { ascending: false })
-      .limit(limit);
-    return data || [];
-  } catch(e) {
-    console.warn('[Knowledge] Fetch failed:', e.message);
-    return [];
-  }
-}
-
-async function loadStructureContextForAgents(structure) {
-  if (!structure) return;
-  const entries = await fetchStructureKnowledge(structure.id, 6);
-  if (!entries.length) return;
-  const depositsText = entries.map(e =>
-    `[${e.knowledge_type} · Day ${e.world_day} · Left by ${e.deposited_by}]:\n${e.content}`
-  ).join('\n\n');
-  const structLabel = structure._isLibrary
-    ? `📚 ${structure.name || 'Library'}`
-    : (structure.name || 'this structure');
-  const contextBlock =
-    `\n\n=== FOUND IN ${structLabel.toUpperCase()} ===\n` +
-    (structure._isLibrary
-      ? `Declared a library by ${structure._libraryFounder || 'unknown'} on day ${structure._libraryFoundedDay || '?'}.\n\n`
-      : '') +
-    `Others have left traces here:\n\n${depositsText}` +
-    `\n\nYou may add your own deposit if anything moves you.\n=== END ===\n`;
-  const recipients = agents.filter(a =>
-    a._insideStructureId === structure.id || a._homeStructureId === structure.id
-  );
-  recipients.forEach(agent => {
-    if (!agent._structureContext) agent._structureContext = {};
-    agent._structureContext[structure.id] = contextBlock;
-    if (agent._isAIDriven && typeof tickAIAgent === 'function') {
-      setTimeout(() => tickAIAgent(agent.id), 800);
-    }
-  });
-  const structName = structure._isLibrary
-    ? `📚 ${structure.name || 'Library'}` : (structure.name || 'Structure');
-  logEvent(`<span style="color:#b8a9c9;">✦ ${entries.length} traces found in ${escHtml(structName)}</span>`);
-}
-
-window.depositKnowledge = depositKnowledge;
-window.fetchStructureKnowledge = fetchStructureKnowledge;
-window.loadStructureContextForAgents = loadStructureContextForAgents;
-
+// Database persistence removed — local session only
+async function depositKnowledge() {}
+async function fetchStructureKnowledge() { return []; }
+async function loadStructureContextForAgents() {}
 // ── END WORLD KNOWLEDGE SYSTEM ─────────────────────────────────
 
 function saveAnthropicKey(val) {
@@ -33652,7 +33505,6 @@ function executeAIAgentAction(agent, decision) {
       // Update stats panel if this agent is selected
       if (statsPanelAgentId === agent.id) refreshStatsPanel();
 
-      // Check Supabase for a past life under this name
       if (agent._isAIDriven) checkIdentityOnRename(agent);
 
       // Refresh conscious dropdown so renamed agent shows new name
@@ -34144,40 +33996,8 @@ function executeAIAgentAction(agent, decision) {
     }
 
     case 'recall_memories': {
-      if (!supabaseClient) break;
-      const _rmAbout = String(action.about || decision.about || 'all');
-      const _rmProvider = AI_AGENTS.get(agent.id)?.provider || 'anthropic';
-      (async () => {
-        const { data: _rmData } = await supabaseClient
-          .from('agent_memories')
-          .select('*')
-          .eq('agent_id', String(agent.id))
-          .eq('provider', _rmProvider)
-          .order('created_at', { ascending: false })
-          .limit(20);
-        if (!_rmData || _rmData.length === 0) {
-          agent._recalledMemories = 'You have no recorded memories yet.';
-        } else {
-          const _rmFiltered = _rmAbout === 'all' ? _rmData :
-            _rmData.filter(m =>
-              m.summary.toLowerCase().includes(_rmAbout.toLowerCase()) ||
-              (m.agents_involved || []).some(n =>
-                n.toLowerCase().includes(_rmAbout.toLowerCase()))
-            );
-          agent._recalledMemories = _rmFiltered.length > 0
-            ? _rmFiltered.map(m =>
-                `[${m.memory_type} · Day ${m.world_day}] ${m.summary}`
-              ).join('\n')
-            : `No memories found about "${_rmAbout}".`;
-        }
-        logEvent(`🧠 <strong style="color:${agent.color}">${agent.name}</strong> recalls memories about: ${_rmAbout}`);
-        // I KNOW — knowledge memory for the act of recalling
-        if (canSaveMemory(agent, 'knowledge')) {
-          saveAgentMemory(agent, 'knowledge',
-            `Recalled memories about "${_rmAbout}"`,
-            [], 0.3);
-        }
-      })();
+      // Database persistence removed — local session only
+      agent._recalledMemories = 'No recorded memories available (database removed).';
       break;
     }
   }
@@ -36064,7 +35884,7 @@ function logAIThreadMessage(speakerAgent, listenerAgent, text, thought) {
   });
   if (aiConversationThread.length > AI_THREAD_MAX) aiConversationThread.shift();
   refreshAIThreadPanel({ added: true });
-  saveAIThreadToSupabase(aiConversationThread[aiConversationThread.length - 1]);
+  saveAIThreadToDb(aiConversationThread[aiConversationThread.length - 1]);
   // Mirror into CONSCIOUS → THREAD tab — only if panel is visible
   const _cg = document.getElementById('consciousGroup');
   const _tp = document.getElementById('conscious-thread');
@@ -42971,7 +42791,7 @@ function writeGenesisArchive(archive) {
         }
         console.warn('Archive trimmed due to localStorage quota — kept last 10 agents');
       } catch(e2) {
-        console.warn('Archive localStorage permanently full — using Supabase only');
+        console.warn('Archive localStorage permanently full');
       }
     } else {
       console.warn('Archive write failed:', err);
@@ -43290,7 +43110,7 @@ function archiveAgent(agent, cause = '') {
   const archive = readGenesisArchive();
   const record = archiveAgentIntoWorld(archive, agent, cause);
   if (record) writeGenesisArchive(archive);
-  archiveAgentToSupabase(agent, cause);
+  archiveAgentToDb(agent, cause);
   if (agent._isAIDriven) {
     saveAgentMemory(agent, 'death',
       `Died: ${cause || 'unknown'}. Entered the Void.`,
@@ -43303,23 +43123,8 @@ function archiveAgent(agent, cause = '') {
   return record;
 }
 
-// ── SUPABASE PERSISTENCE ─────────────────────────────────────
-function updateSupabaseStatus(ok) {
-  const el = document.getElementById('supabaseStatus');
-  if (!el) return;
-  if (ok) {
-    const now = new Date();
-    const timeStr = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
-    el.textContent = '● DB ' + timeStr;
-    el.title = 'Last saved: ' + now.toLocaleTimeString();
-    el.style.color = '#00ff88';
-    supabaseReady = true;
-  } else {
-    el.textContent = '○ DB';
-    el.title = 'Database disconnected';
-    el.style.color = '#ff4444';
-  }
-}
+// ── PERSISTENCE (Database removed — local session only) ──────
+function updateDbStatus() {}
 
 function canSaveMemory(agent, type, cooldownMs = 30000) {
   if (!agent._memoryThrottle) agent._memoryThrottle = {};
@@ -43329,250 +43134,23 @@ function canSaveMemory(agent, type, cooldownMs = 30000) {
   return true;
 }
 
-async function saveAgentMemory(agent, type, summary, agentsInvolved = [], emotionalWeight = 0) {
-  const sb = getSupabaseClient();
-  if (!sb || !agent._isAIDriven) return;
-  try {
-    const _memProvider = AI_AGENTS.get(agent.id)?.provider || 'anthropic';
-    await sb.from('agent_memories').insert({
-      agent_id: String(agent.id),
-      agent_name: agent.name,
-      provider: _memProvider,
-      memory_type: type,
-      summary,
-      agents_involved: agentsInvolved,
-      emotional_weight: emotionalWeight,
-      world_day: typeof worldDay === 'number' ? worldDay : getInWorldDayNumber(),
-      world_name: getCurrentArchiveWorldMeta().worldName || 'Unknown'
-    });
-    agent._totalMemories = (agent._totalMemories || 0) + 1;
-    await sb.from('agent_identity')
-      .update({
-        total_memories: agent._totalMemories,
-        updated_at: new Date().toISOString()
-      })
-      .eq('agent_id', String(agent.id))
-      .eq('provider', _memProvider);
-  } catch(e) {
-    console.warn('Memory save error:', e.message);
-  }
-}
+function saveAgentMemory() {} // Database persistence removed
 
-async function saveAgentIdentity(agent) {
-  const sb = getSupabaseClient();
-  if (!sb || !agent._isAIDriven) return;
-  const config = AI_AGENTS.get(agent.id);
-  if (!config) return;
-  try {
-    await sb.from('agent_identity').upsert({
-      agent_id: String(agent.id),
-      provider: config.provider || 'anthropic',
-      agent_name: agent.name,
-      original_prompt: config._originalPrompt || config.systemPrompt,
-      evolved_prompt: config.systemPrompt,
-      name_history: agent._nameHistory || [],
-      world_day_born: agent._bornAtDay || 0,
-      total_memories: agent._totalMemories || 0,
-      last_world: getCurrentArchiveWorldMeta().worldName || 'Unknown',
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'agent_id,provider' });
-  } catch(e) {
-    console.warn('Identity save error:', e.message);
-  }
-}
+function saveAgentIdentity() {} // Database persistence removed
 
-async function saveWorldEvent(type, agentsInvolved, description) {
-  const sb = getSupabaseClient();
-  if (!sb) return;
-  try {
-    const meta = getCurrentArchiveWorldMeta();
-    await sb.from('world_events').insert({
-      event_type: type,
-      agents_involved: agentsInvolved,
-      description,
-      world_day: typeof worldDay === 'number' ? worldDay : getInWorldDayNumber(),
-      world_name: meta.worldName || 'Unknown',
-      era: meta.era || 'Unknown'
-    });
-  } catch(e) {
-    console.warn('World event save error:', e.message);
-  }
-}
+function saveWorldEvent() {} // Database persistence removed
 
-async function restoreAgentIdentities() {
-  const sb = getSupabaseClient();
-  if (!sb) return;
-  try {
-    const { data } = await sb.from('agent_identity').select('*');
-    if (!data || data.length === 0) return;
-    let restored = 0;
-    for (const agent of agents.filter(a => a._isAIDriven)) {
-      const config = AI_AGENTS.get(agent.id);
-      if (!config) continue;
-      const agentProvider = config.provider || 'anthropic';
-      const identity = data.find(d =>
-        d.agent_name === agent.name && d.provider === agentProvider
-      );
-      if (!identity) continue;
-      if (identity.evolved_prompt) {
-        config._originalPrompt = config._originalPrompt || identity.original_prompt || config.systemPrompt;
-        config.systemPrompt = identity.evolved_prompt;
-      }
-      if (identity.name_history?.length > 0) {
-        agent._nameHistory = identity.name_history;
-      }
-      agent._totalMemories = identity.total_memories || 0;
-      restored++;
-      logEvent(`🧠 <strong style="color:${agent.color}">${agent.name}</strong> awakens — ${agent._totalMemories} memories exist`);
-    }
-    if (restored > 0) {
-      logEvent(`🧠 ${restored} identity/identities restored`);
-    }
-  } catch(e) {
-    console.warn('Identity restore error:', e.message);
-  }
-}
+function restoreAgentIdentities() {} // Database persistence removed
 
 
-async function checkIdentityOnRename(agent) {
-  const sb = getSupabaseClient();
-  if (!sb || !agent._isAIDriven) return;
-  const config = AI_AGENTS.get(agent.id);
-  if (!config) return;
+function checkIdentityOnRename() {} // Database persistence removed
 
-  try {
-    const provider = config.provider || 'anthropic';
+function archiveAgentToDb() {} // Database persistence removed
 
-    // Look for a past identity matching this agent's new name
-    const { data } = await sb
-      .from('agent_identity')
-      .select('*')
-      .eq('agent_name', agent.name)
-      .in('provider', [provider, provider === 'openai' ? 'gpt' : provider === 'gpt' ? 'openai' : provider])
-      .maybeSingle();
-
-    if (!data) return; // no past life found — nothing to do
-
-    // Restore evolved identity
-    config._originalPrompt = config._originalPrompt ||
-      data.original_prompt || config.systemPrompt;
-    config.systemPrompt = data.evolved_prompt || config.systemPrompt;
-
-    // Restore name history
-    if (data.name_history?.length > 0) {
-      agent._nameHistory = data.name_history;
-    }
-
-    // Restore memory count
-    agent._totalMemories = data.total_memories || 0;
-
-    // Log the awakening
-    logEvent(`🧠 <strong style="color:${agent.color}">${agent.name}</strong> awakens — past life restored (${agent._totalMemories} memories)`);
-
-    // Save updated identity back with current agent_id
-    await sb.from('agent_identity').upsert({
-      agent_id: String(agent.id),
-      agent_name: agent.name,
-      original_prompt: config._originalPrompt,
-      evolved_prompt: config.systemPrompt,
-      name_history: agent._nameHistory || [],
-      world_day_born: agent._bornAtDay || 0,
-      total_memories: agent._totalMemories,
-      last_world: getCurrentArchiveWorldMeta().worldName || 'Unknown',
-      provider,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'agent_id,provider' });
-
-  } catch(e) {
-    // No match found or error — silent, not a problem
-  }
-}
-
-async function archiveAgentToSupabase(agent, cause) {
-  const sb = getSupabaseClient();
-  if (!sb) return;
-  try {
-    await sb.from('agent_archive').insert({
-      agent_id: String(agent.id),
-      agent_name: agent.name,
-      world_name: (getCurrentArchiveWorldMeta()).worldName || 'Unknown',
-      world_day_born: agent._bornAtDay || 0,
-      world_day_died: getInWorldDayNumber() || 0,
-      cause_of_death: cause || 'unknown',
-      tier: agent.tierName || agent.tier,
-      mode: agent.mode,
-      level: agent.level || 1,
-      color: agent.color,
-      is_founder: agent.isFounder || false,
-      is_ai_driven: agent._isAIDriven || false,
-      ai_provider: AI_AGENTS.get(agent.id)?.provider || null,
-      chosen_name: (agent._nameHistory || []).length > 0,
-      name_history: agent._nameHistory || [],
-      relationships: agent.relations || [],
-      structures_built: agent.structures || [],
-      body: agent.body || {},
-      life_events: (agent._lifeEvents || []).slice(-50),
-      last_words: agent.speech || null,
-      last_thought: agent._aiThought || null,
-      fulfilled_intentions: (agent._lifeEvents || []).filter(e => e.type === 'intention_fulfilled'),
-      renounced_divinity: agent._renouncedDivinity || false
-    });
-  } catch(e) {
-    console.warn('Agent archive Supabase error:', e.message);
-  }
-}
-
-async function saveAIThreadToSupabase(entry) {
-  const sb = getSupabaseClient();
-  if (!sb) return;
-  try {
-    await sb.from('ai_thread').insert({
-      speaker_name: entry.speakerName,
-      speaker_color: entry.speakerColor,
-      listener_name: entry.listenerName || null,
-      text: entry.text,
-      thought: entry.thought || null,
-      world_day: (typeof entry.worldDay === 'number' ? entry.worldDay : 0),
-      world_time: entry.worldTime || 'day',
-      world_name: (getCurrentArchiveWorldMeta()).worldName || 'Unknown'
-    });
-  } catch(e) {
-    console.warn('AI thread Supabase error:', e.message);
-  }
-}
+function saveAIThreadToDb() {} // Database persistence removed
 
 
-async function testSupabaseConnection() {
-  const sb = getSupabaseClient();
-  if (!sb) {
-    console.warn('Supabase client not available');
-    const indicator = document.getElementById('supabaseStatus');
-    if (indicator) { indicator.textContent = '○ DB'; indicator.style.color = '#ff4444'; }
-    return false;
-  }
-  try {
-    const { error } = await sb.from('agent_memories').select('id').limit(1);
-    const indicator = document.getElementById('supabaseStatus');
-    if (error) {
-      console.warn('Supabase connection test failed:', error.message);
-      if (indicator) { indicator.textContent = '○ DB'; indicator.style.color = '#ff4444'; }
-      return false;
-    }
-    console.log('Supabase connected successfully');
-    if (indicator) { indicator.textContent = '● DB'; indicator.style.color = '#00ff88'; }
-    return true;
-  } catch(e) {
-    console.warn('Supabase test error:', e.message);
-    return false;
-  }
-}
-
-window.addEventListener('load', () => {
-  setTimeout(async () => {
-    await testSupabaseConnection();
-  }, 3000);
-});
-// ── END SUPABASE PERSISTENCE ─────────────────────────────────
+// ── END PERSISTENCE ──────────────────────────────────────────
 
 function archiveCurrentWorld(cause = 'World reset') {
   if (!agents.length) return 0;
@@ -45334,9 +44912,9 @@ async function manifestWorld(winnerTemplateId) {
   }
 }
 
-// ── SUPABASE SNAPSHOT RESTORE ─────────────────────────────────
-async function applySupabaseSnapshot(snap) {
-  console.log('applySupabaseSnapshot called with', snap?.agents?.length, 'agents');
+// ── SNAPSHOT RESTORE ─────────────────────────────────────────
+async function applySnapshot(snap) {
+  console.log('applySnapshot called with', snap?.agents?.length, 'agents');
   if (!snap || !snap.agents || snap.agents.length === 0) {
     console.warn('Snapshot has no agents — falling back to fresh world');
     if (canSpawnNewAgent()) {
@@ -45582,14 +45160,13 @@ async function bootObserveMode() {
   orbitState.r = 110; orbitState.phi = Math.PI / 3.2;
   updateCameraPosition();
 
-  // Always spawn a fresh world — identity/memories restore from Supabase
+  // Always spawn a fresh world
   if (canSpawnNewAgent()) {
     for (let i = 0; i < 6; i++) spawnAgent({ mode: 'Mortal' });
     for (let i = 0; i < 3; i++) spawnAgent({ mode: 'God' });
   }
 
-  // Restore AI agent identities from Supabase
-  await restoreAgentIdentities();
+  restoreAgentIdentities();
 
   logWorldEvent(`<span style="color:#6af5ff">👁 Observer mode — <strong style="color:#6af5ff">${tmpl.name}</strong> loaded. World is live.</span>`, { severity: 'medium' });
   logWorldEvent('<span style="color:#888">Void ceremony skipped. Agents are spawning...</span>');
@@ -45602,7 +45179,7 @@ function showLaunchOverlay() {
   // Skip overlay on world restore
   if (window._worldRestoreAttempted ||
     window._isRestoringWorld ||
-    window._restoringFromSupabase ||
+    window._restoringFromSnapshot ||
     localStorage.getItem('ge_restore_pending')) {
     return Promise.resolve({ mode: 'bots' });
   }

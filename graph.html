@@ -1,0 +1,1713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Genesis Engine — Graph</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+  <style>
+    /* ── Variables ── */
+    :root {
+      --bg:          rgb(8, 10, 18);
+      --bg2:         rgb(11, 14, 24);
+      --glass:       rgba(255,255,255,0.04);
+      --glass-hi:    rgba(255,255,255,0.07);
+      --glass-bd:    rgba(255,255,255,0.08);
+      --glass-bd-hi: rgba(255,255,255,0.18);
+
+      --cyan:   #00f5ff;
+      --cyan40: rgba(0,245,255,0.4);
+      --cyan15: rgba(0,245,255,0.15);
+      --green:  #22c55e;
+      --gold:   #f59e0b;
+      --red:    #ef4444;
+      --text:   rgba(255,255,255,0.85);
+      --muted:  rgba(255,255,255,0.35);
+      --faint:  rgba(255,255,255,0.12);
+
+      --grok:    #ff6b2b;
+      --claude:  #a855f7;
+      --gpt:     #22c55e;
+      --unknown: #94a3b8;
+
+      --font-mono: 'Share Tech Mono', monospace;
+      --font-orb:  'Orbitron', monospace;
+      --font-ui:   'Inter', sans-serif;
+
+      --nav-h: 40px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--cyan40); }
+    * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+
+    /* ── Body ── */
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(0,245,255,0.04) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 90%, rgba(168,85,247,0.04) 0%, transparent 60%);
+      color: var(--text); font-family: var(--font-ui);
+    }
+
+    /* ── Keyframes ── */
+    @keyframes fadeSlideIn  { from { opacity:0; transform:translateX(-5px); } to { opacity:1; transform:none; } }
+    @keyframes fadeIn       { from { opacity:0; } to { opacity:1; } }
+    @keyframes livePulse    { 0%,100%{box-shadow:0 0 6px var(--green);opacity:1;} 50%{box-shadow:0 0 14px var(--green);opacity:0.6;} }
+    @keyframes spinSlow     { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+    @keyframes thinking     { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+    @keyframes tabFadeIn    { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:none;} }
+    @keyframes cardFadeIn   { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:none;} }
+    @keyframes shimmer      { from{background-position:-200% 0;} to{background-position:200% 0;} }
+
+    /* ── Nav ── */
+    .ge-nav {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--nav-h);
+      background: rgba(8,10,18,0.8);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--glass-bd);
+      display: flex; align-items: center; padding: 0 20px; gap: 24px;
+      z-index: 100; font-family: var(--font-orb); font-size: 9px; letter-spacing: 1.5px;
+    }
+    .ge-nav-brand {
+      color: var(--gold); letter-spacing: 3px; font-size: 10px; font-weight: 700;
+      text-shadow: 0 0 20px rgba(245,158,11,0.4);
+    }
+    .nav-tab {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-family: var(--font-orb);
+      font-size: 9px; letter-spacing: 1.5px; padding: 4px 0;
+      position: relative; transition: color 0.2s;
+    }
+    .nav-tab:hover { color: var(--text); }
+    .nav-tab.active { color: var(--cyan); text-shadow: 0 0 12px var(--cyan40); }
+    .nav-tab.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -12px;
+      height: 1px; background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan), 0 0 20px var(--cyan40);
+    }
+    #navStatus { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 8px; }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(255,255,255,0.15); transition: all 0.4s;
+    }
+    .status-dot.live  { background: var(--green); animation: livePulse 2s ease-in-out infinite; }
+    .status-dot.error { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+    #navLabel { color: var(--muted); font-family: var(--font-mono); letter-spacing: 0; font-size: 9px; }
+
+    /* ── No opener screen ── */
+    #noOpenerWarn {
+      display: none; position: fixed; top: var(--nav-h); left: 0; right: 0; bottom: 0;
+      background: var(--bg); align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px; z-index: 200; text-align: center;
+    }
+    #noOpenerWarn.show { display: flex; animation: fadeIn 0.4s; }
+    #noOpenerWarn .warn-icon { font-size: 40px; opacity: 0.2; margin-bottom: 8px; }
+    #noOpenerWarn h2 { color: var(--gold); font-family: var(--font-orb); font-size: 13px; letter-spacing: 3px; }
+    #noOpenerWarn p  { color: var(--muted); font-size: 11px; line-height: 1.9; }
+
+    /* ── Layout ── */
+    #app { position: fixed; top: var(--nav-h); left: 0; right: 0; bottom: 0; display: flex; }
+
+    /* ═══════════════════════════════
+       SIDEBAR
+    ═══════════════════════════════ */
+    #sidebar {
+      width: 240px; flex-shrink: 0;
+      background: rgba(8,10,18,0.6);
+      backdrop-filter: blur(16px);
+      border-right: 1px solid var(--glass-bd);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #sidebar-hdr {
+      padding: 14px 16px 10px; border-bottom: 1px solid var(--glass-bd); flex-shrink: 0;
+    }
+    #sidebar-title {
+      font-family: var(--font-orb); font-size: 8px; letter-spacing: 2.5px;
+      color: var(--cyan); margin-bottom: 4px;
+      text-shadow: 0 0 10px var(--cyan40);
+    }
+    #sidebar-sub { font-size: 10px; color: var(--muted); }
+    #agent-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+
+    .provider-hdr {
+      padding: 10px 16px 6px; font-family: var(--font-orb); font-size: 7px;
+      letter-spacing: 2.5px; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--glass-bd);
+      margin-top: 4px;
+    }
+    .provider-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .provider-hdr .pcnt {
+      margin-left: auto; font-size: 7px; padding: 1px 5px; border-radius: 10px;
+      background: var(--glass); border: 1px solid var(--glass-bd); color: var(--muted);
+    }
+
+    .agent-item {
+      padding: 9px 16px 9px 18px; cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: background 0.15s, border-left-color 0.15s, transform 0.15s;
+      animation: fadeSlideIn 0.25s ease-out both;
+    }
+    .agent-item:hover {
+      background: var(--glass-hi); border-left-color: rgba(255,255,255,0.2);
+      transform: translateX(2px);
+    }
+    .agent-item.selected { background: rgba(0,245,255,0.06); border-left-color: var(--cyan); }
+    .agent-item-name {
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;
+    }
+    .agent-item-meta { font-size: 9px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .tier-badge {
+      font-family: var(--font-orb); font-size: 7px; letter-spacing: 0.5px;
+      padding: 1px 5px; border-radius: 3px; border: 1px solid;
+    }
+    .thinking-spin { display: inline-block; animation: spinSlow 1.2s linear infinite; color: var(--gold); font-size: 11px; }
+    .mortal-group .agent-item-name { color: var(--muted); font-weight: 400; }
+
+    /* ═══════════════════════════════
+       MAIN
+    ═══════════════════════════════ */
+    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+    /* ── Second Brain view ── */
+    #brainView { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    #identity-card {
+      display: none; padding: 14px 20px; border-bottom: 1px solid var(--glass-bd);
+      background: rgba(0,0,0,0.3); backdrop-filter: blur(12px);
+      flex-shrink: 0; flex-wrap: wrap; gap: 16px 24px;
+      animation: tabFadeIn 0.25s ease-out;
+    }
+    #identity-card.show { display: flex; align-items: flex-start; }
+
+    .id-field { display: flex; flex-direction: column; gap: 3px; }
+    .id-label {
+      font-family: var(--font-orb); font-size: 7px; letter-spacing: 2px;
+      color: var(--muted); text-transform: uppercase;
+    }
+    .id-val { font-size: 12px; color: var(--text); font-weight: 500; }
+    .id-val.gold  { color: var(--gold); }
+    .id-val.green { color: var(--green); }
+    .id-val.cyan  { color: var(--cyan); }
+
+    .bp-pill {
+      display: inline-block; font-size: 8px; padding: 2px 7px; border-radius: 10px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      color: var(--muted); margin: 2px 2px 0 0; font-family: var(--font-mono);
+    }
+
+    #canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+    #sb-canvas { display: block; cursor: grab; }
+    #sb-canvas.grabbing { cursor: grabbing; }
+
+    #sb-empty {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      text-align: center; pointer-events: none;
+    }
+    #sb-empty-icon { font-size: 48px; opacity: 0.08; margin-bottom: 16px; }
+    #sb-empty-msg  { font-family: var(--font-orb); font-size: 11px; letter-spacing: 3px; color: var(--muted); }
+    #sb-empty-sub  { margin-top: 8px; font-size: 10px; color: var(--faint); }
+
+    #sb-ctrl { position: absolute; top: 12px; right: 14px; display: flex; gap: 6px; z-index: 10; }
+    .sb-btn {
+      height: 26px; padding: 0 12px;
+      background: rgba(8,10,18,0.7); backdrop-filter: blur(8px);
+      border: 1px solid var(--glass-bd); border-radius: 5px;
+      color: var(--muted); cursor: pointer; font-family: var(--font-orb);
+      font-size: 8px; letter-spacing: 1px; transition: all 0.15s;
+    }
+    .sb-btn:hover { border-color: var(--cyan40); color: var(--cyan); background: rgba(0,245,255,0.06); }
+
+    #sb-legend {
+      position: absolute; right: 14px; bottom: 32px; z-index: 10;
+      background: rgba(8,10,18,0.75); backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-bd); border-radius: 8px; padding: 10px 12px;
+    }
+    .legend-title { font-family: var(--font-orb); font-size: 7px; letter-spacing: 2px; color: var(--muted); margin-bottom: 8px; }
+    .legend-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .legend-lbl { font-size: 9px; }
+
+    #sb-status {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+      padding: 0 14px;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+      border-top: 1px solid var(--glass-bd);
+      display: flex; align-items: center; gap: 14px;
+      font-size: 9px; color: var(--muted); z-index: 10;
+      font-family: var(--font-mono);
+    }
+
+    /* ── Tooltip ── */
+    #sb-tooltip {
+      position: fixed; display: none; z-index: 400;
+      background: rgba(8,10,18,0.95); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px; padding: 10px 12px; max-width: 280px;
+      font-size: 10px; pointer-events: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      animation: fadeIn 0.12s ease-out;
+    }
+    .tt-title { font-family: var(--font-orb); font-size: 9px; margin-bottom: 4px; letter-spacing: 1px; color: var(--cyan); }
+    .tt-type  { font-size: 8px; color: var(--muted); margin-bottom: 5px; letter-spacing: 1px; }
+    .tt-body  { font-size: 10px; line-height: 1.6; color: rgba(255,255,255,0.7); }
+
+    /* ═══════════════════════════════
+       WORLD STATE
+    ═══════════════════════════════ */
+    #worldView { flex: 1; display: none; overflow: hidden; flex-direction: column; }
+    #worldView.show { display: flex; animation: tabFadeIn 0.25s ease-out; }
+
+    #world-top {
+      display: flex; flex-direction: row; flex-shrink: 0;
+      border-bottom: 1px solid var(--glass-bd); height: 280px;
+    }
+    #grid-wrap {
+      width: 300px; flex-shrink: 0; border-right: 1px solid var(--glass-bd);
+      padding: 14px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .section-label {
+      font-family: var(--font-orb); font-size: 7px; letter-spacing: 2.5px; color: var(--muted);
+    }
+    #world-canvas {
+      display: block; border: 1px solid var(--glass-bd); border-radius: 6px;
+      background: rgba(0,0,0,0.4);
+    }
+    #laws-wrap { flex: 1; padding: 14px 16px; overflow-y: auto; }
+    #laws-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .law-item {
+      font-size: 11px; padding: 8px 10px; line-height: 1.6;
+      background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.15);
+      border-radius: 6px;
+    }
+    .law-by { font-size: 9px; color: var(--muted); margin-top: 3px; font-family: var(--font-mono); }
+
+    #world-bottom { flex: 1; display: flex; overflow: hidden; }
+    #agent-cards-wrap { flex: 1; overflow-y: auto; padding: 12px 14px; }
+    #agent-cards {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .agent-card {
+      background: var(--glass); backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-bd);
+      border-radius: 10px; padding: 12px; cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s, background 0.2s;
+      animation: cardFadeIn 0.3s ease-out both;
+    }
+    .agent-card:hover {
+      border-color: var(--glass-bd-hi); background: var(--glass-hi);
+      transform: translateY(-1px);
+    }
+    .agent-card.inflight { border-color: rgba(245,158,11,0.35); }
+
+    .card-name {
+      font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
+      margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
+    }
+    .card-badge {
+      font-family: var(--font-orb); font-size: 7px; padding: 2px 5px;
+      border-radius: 3px; border: 1px solid; letter-spacing: 0.5px;
+    }
+    .card-thinking { animation: thinking 1.1s ease-in-out infinite; color: var(--gold); font-size: 12px; }
+
+    .hp-bar-track { height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-bottom: 8px; overflow: hidden; }
+    .hp-bar-fill  { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+
+    .card-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px; color: var(--muted); }
+    .card-val  { color: var(--text); font-weight: 500; }
+
+    .card-speech {
+      font-size: 10px; color: rgba(255,255,255,0.6); line-height: 1.5;
+      margin-top: 6px; padding: 6px 8px; border-radius: 5px;
+      background: rgba(0,245,255,0.04); border: 1px solid rgba(0,245,255,0.1);
+      font-style: italic;
+    }
+    .card-thought {
+      font-size: 9px; color: rgba(245,158,11,0.6); line-height: 1.5;
+      margin-top: 5px; font-style: italic;
+    }
+
+    /* ── Thread ── */
+    #thread-wrap {
+      width: 320px; flex-shrink: 0; border-left: 1px solid var(--glass-bd);
+      display: flex; flex-direction: column; overflow: hidden;
+      background: rgba(0,0,0,0.2);
+    }
+    #thread-hdr {
+      padding: 12px 16px 8px; border-bottom: 1px solid var(--glass-bd); flex-shrink: 0;
+    }
+    #thread-feed { flex: 1; overflow-y: auto; padding: 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+
+    .thread-msg {
+      display: flex; gap: 9px; animation: fadeSlideIn 0.2s ease-out;
+    }
+    .tm-avatar {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-orb); font-size: 10px; font-weight: 700;
+      border: 1px solid;
+    }
+    .tm-content { flex: 1; min-width: 0; }
+    .tm-bubble {
+      background: var(--glass); border: 1px solid var(--glass-bd);
+      border-radius: 0 8px 8px 8px; padding: 7px 10px; font-size: 10px;
+      line-height: 1.6;
+    }
+    .tm-header { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; flex-wrap: wrap; }
+    .tm-speaker { font-family: var(--font-orb); font-size: 8px; letter-spacing: 1px; font-weight: 700; }
+    .tm-arrow { color: var(--muted); font-size: 9px; }
+    .tm-text { color: rgba(255,255,255,0.75); }
+    .tm-text.clamped {
+      display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+    }
+    .tm-toggle {
+      background:none;border:none;color:var(--cyan40);font-size:8px;font-family:var(--font-mono);
+      cursor:pointer;padding:2px 0 0;letter-spacing:0.5px;
+    }
+    .tm-toggle:hover { color:var(--cyan); }
+    .tm-thought { font-size: 9px; color: rgba(245,158,11,0.55); font-style: italic; margin-top: 3px; }
+    .tm-meta { font-size: 8px; color: var(--muted); margin-top: 4px; font-family: var(--font-mono); }
+  </style>
+</head>
+<body>
+
+<nav class="ge-nav">
+  <span class="ge-nav-brand">GENESIS ENGINE</span>
+  <button class="nav-tab active" id="tabBrainBtn" onclick="switchTab('brain')">SECOND BRAIN</button>
+  <button class="nav-tab"        id="tabWorldBtn" onclick="switchTab('world')">WORLD STATE</button>
+  <div id="navStatus">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="navLabel">connecting…</span>
+  </div>
+</nav>
+
+<div id="noOpenerWarn">
+  <div class="warn-icon">◎</div>
+  <h2>NO WORLD WINDOW</h2>
+  <p>graph.html must be opened from genesis-3d.html via the GRAPH button.<br>
+     It reads live data from the parent window using window.opener.</p>
+</div>
+
+<div id="app">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-hdr">
+      <div id="sidebar-title">NEURAL BANK</div>
+      <div id="sidebar-sub">Select an agent to explore</div>
+    </div>
+    <div id="agent-list"></div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+
+    <!-- SECOND BRAIN view -->
+    <div id="brainView">
+      <div id="identity-card"></div>
+      <div id="canvas-wrap">
+        <canvas id="sb-canvas"></canvas>
+
+        <div id="sb-empty">
+          <div id="sb-empty-icon">◎</div>
+          <div id="sb-empty-msg">SELECT AN AGENT</div>
+          <div id="sb-empty-sub">or click ALL AGENTS to see the network</div>
+        </div>
+
+        <div id="sb-ctrl">
+          <button class="sb-btn" onclick="sbResetView()">RESET VIEW</button>
+          <button class="sb-btn" onclick="sbShowAll()">ALL AGENTS</button>
+        </div>
+
+        <div id="sb-legend"><div class="legend-title">DIMENSIONS</div></div>
+        <div id="sb-status">
+          <span id="sb-status-agent">—</span>
+          <span id="sb-status-counts"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORLD STATE view -->
+    <div id="worldView">
+      <div id="world-top">
+        <div id="grid-wrap">
+          <div class="section-label">WORLD GRID</div>
+          <canvas id="world-canvas" width="262" height="248"></canvas>
+        </div>
+        <div id="laws-wrap">
+          <div class="section-label">ACTIVE LAWS</div>
+          <div id="laws-list"></div>
+        </div>
+      </div>
+      <div id="world-bottom">
+        <div id="agent-cards-wrap"><div id="agent-cards"></div></div>
+        <div id="thread-wrap">
+          <div id="thread-hdr"><div class="section-label">AI THREAD FEED</div></div>
+          <div id="thread-feed"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="sb-tooltip">
+  <div class="tt-title" id="tt-title"></div>
+  <div class="tt-type"  id="tt-type"></div>
+  <div class="tt-body"  id="tt-body"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════════════ */
+const POLL_MS = 2000;
+
+const PROVIDER_COLOR = {
+  grok:      '#ff6b2b',
+  openai:    '#22c55e',
+  anthropic: '#a855f7',
+  claude:    '#a855f7',
+};
+const PROVIDER_LABEL = { grok:'GROK', openai:'GPT', anthropic:'CLAUDE', claude:'CLAUDE' };
+
+const DIMS = [
+  { id:'I speak', label:'I SPEAK', color:'#06b6d4' },
+  { id:'I am',    label:'I AM',    color:'#a855f7' },
+  { id:'I do',    label:'I DO',    color:'#f97316' },
+  { id:'I see',   label:'I SEE',   color:'#3b82f6' },
+  { id:'I love',  label:'I LOVE',  color:'#ec4899' },
+  { id:'I know',  label:'I KNOW',  color:'#eab308' },
+];
+
+const LIFE_EVENT_DIM = {
+  speech:'I speak', conversation:'I speak', encounter:'I speak', message:'I speak',
+  declaration:'I am', rebirth:'I am', evolution:'I am', birth:'I am', identity:'I am', void:'I am',
+  combat:'I do', kill:'I do', build:'I do', war:'I do', territory:'I do', action:'I do',
+  observation:'I see', world_event:'I see', witness:'I see', world:'I see',
+  alliance:'I love', bond:'I love', follow:'I love',
+  death:'I know', knowledge:'I know', thought:'I know', recall:'I know',
+};
+
+function mapEventDim(type) {
+  return LIFE_EVENT_DIM[String(type||'').toLowerCase()] || 'I know';
+}
+
+// Force sim — agent view
+const HUB_R      = 180;
+const MEM_TARGET = 70;
+const REPULSION  = 700;
+const SPRING     = 0.035;
+const DAMP       = 0.78;
+const CENTER_G   = 0.005;
+const MAX_VEL    = 5;
+
+// Force sim — bank view
+const BANK_REPULSION = 6000;
+const BANK_SPRING    = 0.04;
+const BANK_DAMP      = 0.78;
+
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+let liveData = { agents:[], aiMap:new Map(), structures:[], thread:[], govState:{}, activeLaws:[] };
+
+const SB = {
+  mode:'empty',
+  selectedId:null,
+  nodes:[], edges:[],
+  offsetX:0, offsetY:0, scale:1,
+  drag:null, panning:false,
+  panStartX:0, panStartY:0, panBaseX:0, panBaseY:0,
+  rafId:null, hoverNode:null,
+  activeFrames:0,   // frames left to run physics; replenished when nodes change
+};
+
+let activeTab = 'brain';
+let _pulseT   = 0;
+
+/* ═══════════════════════════════════════════════════════
+   POLLING
+═══════════════════════════════════════════════════════ */
+function pollOpener() {
+  const op = window.opener;
+  if (!op) {
+    setStatus(false, 'no opener');
+    document.getElementById('noOpenerWarn').classList.add('show');
+    return;
+  }
+  document.getElementById('noOpenerWarn').classList.remove('show');
+  try {
+    const rawAgents = op.agents;
+    if (!rawAgents) { setStatus(false, 'no data'); return; }
+
+    const agents    = Array.isArray(rawAgents) ? rawAgents : [];
+    const aiMapRaw  = op.AI_AGENTS;
+    const aiMap     = aiMapRaw instanceof Map ? aiMapRaw : new Map();
+    const structures = Array.isArray(op.structures) ? op.structures : [];
+    const thread    = Array.isArray(op.aiConversationThread) ? op.aiConversationThread : [];
+    const govState  = op.govState  || {};
+    const activeLaws = Array.isArray(op.activeLaws) ? op.activeLaws : [];
+
+    liveData = { agents, aiMap, structures, thread:thread.slice(-30), govState, activeLaws };
+    setStatus(true, `${agents.length} agents · ${aiMap.size} AI`);
+    onDataUpdate();
+  } catch(e) {
+    setStatus(false, 'read error');
+    console.warn('[Graph] poll error:', e.message);
+  }
+}
+
+function setStatus(live, msg) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (live ? ' live' : (msg === 'no opener' ? '' : ' error'));
+  document.getElementById('navLabel').textContent = msg;
+}
+
+function onDataUpdate() {
+  renderSidebar();
+  if (activeTab === 'brain') {
+    if (SB.mode === 'bank') buildBankGraph();
+    else if (SB.mode === 'agent' && SB.selectedId != null) {
+      const agent = liveData.agents.find(a => a.id === SB.selectedId);
+      if (agent) { buildAgentGraph(agent); renderIdentityCard(agent); }
+    }
+  } else {
+    renderWorldState();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════════════ */
+function tierColor(tier) {
+  const t = Number(tier) || 0;
+  if (t >= 6) return '#f59e0b';
+  if (t >= 4) return '#a855f7';
+  if (t >= 2) return '#06b6d4';
+  return '#94a3b8';
+}
+
+// Sidebar diffing state
+let _sbPrevIds = [];   // ordered list of agent ids from last render
+let _sbPrevSnap = {};  // id → snapshot string for change detection
+
+function _sbAgentSnap(agent, cfg) {
+  const inFlight = cfg?.inFlight || agent._inFlightSince ? 1 : 0;
+  return `${agent.name}|${agent.color||''}|${agent.tier||0}|${agent.mode||''}|${SB.selectedId===agent.id?1:0}|${inFlight}|${cfg?.provider||''}|${agent._isAIDriven?1:0}`;
+}
+
+function _sbBuildAgentEl(agent, cfg, isMortal) {
+  const prov = cfg?.provider || 'other';
+  const col  = PROVIDER_COLOR[prov] || '#94a3b8';
+  const sel  = SB.selectedId === agent.id ? ' selected' : '';
+  const inFlight = cfg?.inFlight || agent._inFlightSince;
+  const tc   = tierColor(agent.tier);
+  const div  = document.createElement('div');
+  div.className = 'agent-item' + (isMortal ? ' mortal-group' : '') + sel;
+  div.setAttribute('onclick', `selectAgent(${agent.id})`);
+  div.dataset.id = agent.id;
+  div.innerHTML = `<div class="agent-item-name"${isMortal ? '' : ` style="color:${agent.color || col}"`}>${esc(agent.name)}</div>
+    <div class="agent-item-meta">
+      <span class="tier-badge" style="color:${tc};border-color:${tc}44;background:${tc}10">T${agent.tier||'?'}</span>
+      <span>${agent.mode||''}</span>
+      ${!isMortal && inFlight ? `<span class="thinking-spin">⟳</span>` : ''}
+    </div>`;
+  return div;
+}
+
+function renderSidebar() {
+  const el = document.getElementById('agent-list');
+  const aiAgents = liveData.agents.filter(a => a._isAIDriven);
+  const mortals  = liveData.agents.filter(a => !a._isAIDriven);
+
+  // Build ordered list of groups and agents
+  const byProvider = {};
+  for (const agent of aiAgents) {
+    const cfg  = liveData.aiMap.get(agent.id);
+    const prov = cfg?.provider || 'other';
+    if (!byProvider[prov]) byProvider[prov] = [];
+    byProvider[prov].push({ agent, cfg });
+  }
+
+  const entries = []; // { type:'hdr'|'agent', key, agent?, cfg?, prov?, isMortal? }
+  for (const [prov, items] of Object.entries(byProvider)) {
+    entries.push({ type: 'hdr', key: `hdr-${prov}`, prov, count: items.length });
+    for (const { agent, cfg } of items) entries.push({ type: 'agent', key: `a-${agent.id}`, agent, cfg, isMortal: false });
+  }
+  if (mortals.length) {
+    entries.push({ type: 'hdr', key: 'hdr-mortal', prov: 'mortal', count: mortals.length });
+    for (const agent of mortals.slice(0, 20)) entries.push({ type: 'agent', key: `a-${agent.id}`, agent, cfg: null, isMortal: true });
+  }
+
+  const newIds = entries.map(e => e.key);
+  const newSnap = {};
+  for (const e of entries) {
+    if (e.type === 'agent') newSnap[e.key] = _sbAgentSnap(e.agent, e.cfg);
+    else newSnap[e.key] = `${e.prov}|${e.count}`;
+  }
+
+  // Fast path: if order + snapshots are identical, skip DOM work entirely
+  if (newIds.length === _sbPrevIds.length && newIds.every((id, i) => id === _sbPrevIds[i] && newSnap[id] === _sbPrevSnap[id])) {
+    return;
+  }
+
+  // Build a map of existing DOM children by key
+  const existingByKey = {};
+  for (const child of el.children) {
+    const k = child.dataset.key;
+    if (k) existingByKey[k] = child;
+  }
+
+  // Build the new child list, reusing or creating nodes
+  const fragment = document.createDocumentFragment();
+  for (const e of entries) {
+    const prevSnap = _sbPrevSnap[e.key];
+    const unchanged = prevSnap === newSnap[e.key];
+
+    if (unchanged && existingByKey[e.key]) {
+      // Reuse existing DOM node as-is
+      fragment.appendChild(existingByKey[e.key]);
+    } else if (e.type === 'hdr') {
+      const col = e.prov === 'mortal' ? '' : (PROVIDER_COLOR[e.prov] || '#94a3b8');
+      const lbl = e.prov === 'mortal' ? 'MORTAL' : (PROVIDER_LABEL[e.prov] || e.prov.toUpperCase());
+      const div = document.createElement('div');
+      div.className = 'provider-hdr' + (e.prov === 'mortal' ? ' mortal-group' : '');
+      div.dataset.key = e.key;
+      if (col) {
+        div.innerHTML = `<div class="provider-dot" style="background:${col};box-shadow:0 0 6px ${col}66"></div>
+          <span style="color:${col}">${lbl}</span><span class="pcnt">${e.count}</span>`;
+      } else {
+        div.innerHTML = `<span>${lbl}</span><span class="pcnt">${e.count}</span>`;
+      }
+      fragment.appendChild(div);
+    } else {
+      const div = _sbBuildAgentEl(e.agent, e.cfg, e.isMortal);
+      div.dataset.key = e.key;
+      fragment.appendChild(div);
+    }
+  }
+
+  if (!entries.length) {
+    el.innerHTML = `<div style="padding:24px 16px;font-size:11px;color:var(--muted);text-align:center">No agents found</div>`;
+  } else {
+    el.textContent = '';
+    el.appendChild(fragment);
+  }
+
+  _sbPrevIds = newIds;
+  _sbPrevSnap = newSnap;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TAB SWITCHING
+═══════════════════════════════════════════════════════ */
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabBrainBtn').classList.toggle('active', tab === 'brain');
+  document.getElementById('tabWorldBtn').classList.toggle('active', tab === 'world');
+  document.getElementById('brainView').style.display = tab === 'brain' ? 'flex' : 'none';
+  document.getElementById('worldView').classList.toggle('show', tab === 'world');
+  if (tab === 'world') renderWorldState();
+  else { sbResizeCanvas(); sbEnsureLoop(); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   AGENT SELECTION
+═══════════════════════════════════════════════════════ */
+function selectAgent(id) {
+  SB.selectedId = id;
+  SB.mode = 'agent';
+  SB.offsetX = 0; SB.offsetY = 0; SB.scale = 1;
+  document.getElementById('sb-empty').style.display = 'none';
+  const agent = liveData.agents.find(a => a.id === id);
+  if (!agent) return;
+  renderIdentityCard(agent);
+  buildAgentGraph(agent);
+  document.querySelectorAll('.agent-item').forEach(el => {
+    el.classList.toggle('selected', Number(el.dataset.id) === id);
+  });
+}
+
+function sbShowAll() {
+  SB.selectedId = null; SB.mode = 'bank';
+  SB.offsetX = 0; SB.offsetY = 0; SB.scale = 1;
+  document.getElementById('sb-empty').style.display = 'none';
+  document.getElementById('identity-card').classList.remove('show');
+  document.getElementById('identity-card').innerHTML = '';
+  buildBankGraph();
+}
+
+/* ═══════════════════════════════════════════════════════
+   IDENTITY CARD
+═══════════════════════════════════════════════════════ */
+function renderIdentityCard(agent) {
+  const cfg       = liveData.aiMap.get(agent.id);
+  const prov      = cfg?.provider || '';
+  const provLabel = PROVIDER_LABEL[prov] || '';
+  const provCol   = PROVIDER_COLOR[prov] || '#94a3b8';
+  const callCount = cfg?.callCount ?? '—';
+  const lastAction = cfg?.lastDecision?.action || agent._aiLastAction || '—';
+  const thought   = agent._aiThought || '';
+  const hp        = agent.maxHp > 0
+    ? `${Math.round(agent.hp)}/${agent.maxHp}`
+    : `${Math.round((agent.energy||0)*100)}%`;
+  const inFlight  = cfg?.inFlight;
+
+  // Body parts as pills
+  const parts = Array.isArray(agent._bodyPartsEarned) ? agent._bodyPartsEarned : [];
+  const partPills = parts.slice(0,8).map(p =>
+    `<span class="bp-pill">${esc(String(p))}</span>`).join('');
+
+  const ic = document.getElementById('identity-card');
+  ic.innerHTML = `
+    <div class="id-field">
+      <div class="id-label">AGENT</div>
+      <div class="id-val" style="color:${agent.color||'#fff'};font-size:14px;font-weight:700">${esc(agent.name)}</div>
+    </div>
+    <div class="id-field">
+      <div class="id-label">PROVIDER</div>
+      <div class="id-val" style="color:${provCol}">${provLabel||'—'}</div>
+    </div>
+    <div class="id-field">
+      <div class="id-label">MODE / TIER</div>
+      <div class="id-val">${agent.mode||'—'} · <span style="color:${tierColor(agent.tier)}">T${agent.tier||'?'}</span></div>
+    </div>
+    <div class="id-field">
+      <div class="id-label">HP / ENERGY</div>
+      <div class="id-val cyan">${hp}</div>
+    </div>
+    <div class="id-field">
+      <div class="id-label">DECISIONS</div>
+      <div class="id-val green">${callCount}</div>
+    </div>
+    <div class="id-field">
+      <div class="id-label">LAST ACTION</div>
+      <div class="id-val gold">${esc(String(lastAction).slice(0,24))}</div>
+    </div>
+    ${thought ? `<div class="id-field" style="flex:1;min-width:200px;max-width:340px">
+      <div class="id-label">CURRENT THOUGHT</div>
+      <div class="id-val" style="font-size:10px;line-height:1.5;color:rgba(255,255,255,0.65)">${esc(thought.slice(0,160))}</div>
+    </div>` : ''}
+    ${partPills ? `<div class="id-field" style="flex-basis:100%">
+      <div class="id-label">BODY PARTS</div>
+      <div style="margin-top:3px">${partPills}</div>
+    </div>` : ''}
+    ${inFlight ? `<div class="id-field">
+      <div class="id-label">&nbsp;</div>
+      <div class="id-val" style="color:var(--gold);display:flex;align-items:center;gap:6px">
+        <span style="animation:spinSlow 1s linear infinite;display:inline-block">⟳</span> THINKING
+      </div>
+    </div>` : ''}
+  `;
+  ic.classList.add('show');
+}
+
+/* ═══════════════════════════════════════════════════════
+   GRAPH BUILDER — AGENT VIEW  (diff-based, no flicker)
+═══════════════════════════════════════════════════════ */
+function buildAgentGraph(agent) {
+  const canvas = document.getElementById('sb-canvas');
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2;
+  const cfg      = liveData.aiMap.get(agent.id);
+  const prov     = cfg?.provider || 'other';
+  const provCol  = PROVIDER_COLOR[prov] || '#94a3b8';
+  const inFlight = !!(cfg?.inFlight);
+
+  // ── Build desired node list with stable IDs ──
+  const desired = [];
+  const desiredEdges = [];
+
+  desired.push({
+    id:'agent', type:'agent', label:agent.name,
+    x:cx, y:cy, vx:0, vy:0, fixed:true,
+    radius:24, color:provCol, glow:provCol+'55', inFlight,
+  });
+
+  DIMS.forEach((dim, i) => {
+    const angle = (i/DIMS.length)*Math.PI*2 - Math.PI/2;
+    const hx = cx + Math.cos(angle)*HUB_R;
+    const hy = cy + Math.sin(angle)*HUB_R;
+    desired.push({
+      id:'dim_'+dim.id, type:'dimension', dim:dim.id, label:dim.label,
+      x:hx, y:hy, vx:0, vy:0, fixedX:hx, fixedY:hy,
+      radius:14, color:dim.color, glow:dim.color+'44', count:0,
+    });
+    desiredEdges.push({ source:'agent', target:'dim_'+dim.id, type:'axis', color:dim.color+'30' });
+  });
+
+  // Collect memory items with globally stable IDs
+  const lifeEvents = Array.isArray(agent._lifeEvents) ? agent._lifeEvents : [];
+  const leBase = Math.max(0, lifeEvents.length - 60);
+  lifeEvents.slice(-60).forEach((ev, si) => {
+    const dim      = mapEventDim(ev.type || ev.kind || '');
+    const dimColor = DIMS.find(d=>d.id===dim)?.color || '#aef7ff';
+    const recency  = si / Math.max(lifeEvents.slice(-60).length, 1);
+    desired.push({
+      id:'lev_'+(leBase+si), type:'memory', dim, _hubId:'dim_'+dim,
+      label:(ev.type||'event').toUpperCase(), text:ev.text||ev.summary||String(ev),
+      vx:0, vy:0, radius:3+recency*5, color:dimColor, glow:dimColor+'33',
+    });
+    desiredEdges.push({ source:'dim_'+dim, target:'lev_'+(leBase+si), type:'memory', color:dimColor+'40' });
+  });
+
+  const thoughts = Array.isArray(agent.thoughtLog) ? agent.thoughtLog : [];
+  const tBase = Math.max(0, thoughts.length - 30);
+  thoughts.slice(-30).forEach((t, si) => {
+    const dim      = 'I know';
+    const dimColor = DIMS.find(d=>d.id===dim)?.color || '#aef7ff';
+    const recency  = si / Math.max(thoughts.slice(-30).length, 1);
+    desired.push({
+      id:'tlog_'+(tBase+si), type:'memory', dim, _hubId:'dim_'+dim,
+      label:(t.kind||t.type||'thought').toUpperCase(), text:t.text||t.thought||String(t),
+      vx:0, vy:0, radius:3+recency*5, color:dimColor, glow:dimColor+'33',
+    });
+    desiredEdges.push({ source:'dim_'+dim, target:'tlog_'+(tBase+si), type:'memory', color:dimColor+'40' });
+  });
+
+  const convLog = Array.isArray(agent.conversationLog) ? agent.conversationLog : [];
+  convLog.slice(-15).forEach((c, i) => {
+    const dim      = 'I speak';
+    const dimColor = DIMS.find(d=>d.id===dim)?.color || '#aef7ff';
+    const recency  = i / Math.max(convLog.slice(-15).length, 1);
+    desired.push({
+      id:'conv_'+i, type:'memory', dim, _hubId:'dim_'+dim,
+      label:'CONVERSATION', text:`To ${c.otherName||'?'}: "${(c.selfText||'').slice(0,80)}"`,
+      vx:0, vy:0, radius:3+recency*5, color:dimColor, glow:dimColor+'33',
+    });
+    desiredEdges.push({ source:'dim_'+dim, target:'conv_'+i, type:'memory', color:dimColor+'40' });
+  });
+
+  const decl = agent._declarationField;
+  if (decl?.phrase) {
+    const dim      = 'I am';
+    const dimColor = DIMS.find(d=>d.id===dim)?.color || '#aef7ff';
+    desired.push({
+      id:'decl', type:'memory', dim, _hubId:'dim_'+dim,
+      label:'DECLARATION', text:decl.phrase,
+      vx:0, vy:0, radius:7, color:dimColor, glow:dimColor+'33',
+    });
+    desiredEdges.push({ source:'dim_'+dim, target:'decl', type:'memory', color:dimColor+'40' });
+  }
+
+  // Tally counts on dimension nodes
+  const dimCounts = {};
+  for (const d of desired) {
+    if (d.type === 'memory') dimCounts['dim_'+d.dim] = (dimCounts['dim_'+d.dim]||0)+1;
+  }
+  for (const d of desired) {
+    if (d.type === 'dimension') d.count = dimCounts[d.id] || 0;
+  }
+
+  // ── Merge desired against existing nodes (preserve positions) ──
+  mergeNodes(desired, desiredEdges, cx, cy);
+  updateSBStatus();
+  sbEnsureLoop();
+}
+
+/* ═══════════════════════════════════════════════════════
+   GRAPH BUILDER — BANK VIEW  (diff-based, no flicker)
+═══════════════════════════════════════════════════════ */
+function buildBankGraph() {
+  const canvas = document.getElementById('sb-canvas');
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2;
+
+  const aiAgents = liveData.agents.filter(a => a._isAIDriven);
+  if (!aiAgents.length) {
+    SB.nodes = []; SB.edges = [];
+    document.getElementById('sb-empty').style.display = 'block';
+    return;
+  }
+  document.getElementById('sb-empty').style.display = 'none';
+
+  const desired = [];
+  const r = Math.min(W,H)*0.3;
+
+  aiAgents.forEach((agent, i) => {
+    const cfg  = liveData.aiMap.get(agent.id);
+    const prov = cfg?.provider || 'other';
+    const col  = PROVIDER_COLOR[prov] || '#94a3b8';
+    const angle = (i/aiAgents.length)*Math.PI*2;
+    desired.push({
+      id:'agent_'+agent.id, type:'bank_agent',
+      label:agent.name, agentId:agent.id,
+      // spawn position only used when node is brand-new
+      _spawnX: cx + Math.cos(angle)*r*(0.7+Math.random()*0.3),
+      _spawnY: cy + Math.sin(angle)*r*(0.7+Math.random()*0.3),
+      vx:0, vy:0, radius:16, color:col, glow:col+'44',
+      inFlight:!!(cfg?.inFlight), provider:prov,
+    });
+  });
+
+  // Build desired edges (de-duped conversation pairs)
+  const desiredEdges = [];
+  const edgePairs = new Set();
+  const desiredIds = new Set(desired.map(n=>n.id));
+  for (const agent of aiAgents) {
+    const convLog = Array.isArray(agent.conversationLog) ? agent.conversationLog : [];
+    for (const c of convLog) {
+      const a = agent.id, b = c.otherId;
+      if (!b) continue;
+      const key = [Math.min(a,b),Math.max(a,b)].join('_');
+      if (edgePairs.has(key)) continue;
+      edgePairs.add(key);
+      if (desiredIds.has('agent_'+a) && desiredIds.has('agent_'+b)) {
+        desiredEdges.push({ source:'agent_'+a, target:'agent_'+b, type:'conversation', color:'rgba(255,255,255,0.1)' });
+      }
+    }
+  }
+
+  mergeNodes(desired, desiredEdges, cx, cy);
+  updateSBStatus();
+  sbEnsureLoop();
+}
+
+/* ═══════════════════════════════════════════════════════
+   NODE MERGE  (diff existing nodes, preserve positions)
+═══════════════════════════════════════════════════════ */
+function mergeNodes(desired, desiredEdges, cx, cy) {
+  const existingMap = new Map(SB.nodes.map(n => [n.id, n]));
+  const newNodes = [];
+  const builtMap = new Map();   // track nodes added so far for spawn-near-hub
+
+  let addedCount = 0;
+
+  for (const d of desired) {
+    const ex = existingMap.get(d.id);
+    if (ex) {
+      // Preserve position & velocity — only update mutable display props
+      if (d.inFlight !== undefined) ex.inFlight = d.inFlight;
+      if (d.count    !== undefined) ex.count    = d.count;
+      ex.radius = d.radius;           // recency-based radius may shift
+      ex.color  = d.color;
+      ex.glow   = d.glow;
+      // Keep fixed-position nodes pinned to latest canvas dimensions
+      if (d.fixed) { ex.x = d.x; ex.y = d.y; }
+      if (d.fixedX !== undefined) { ex.fixedX = d.fixedX; ex.fixedY = d.fixedY; }
+      newNodes.push(ex);
+      builtMap.set(d.id, ex);
+    } else {
+      // Brand-new node — spawn near its hub (or canvas centre) to avoid jumps
+      if (d.type === 'memory' && d._hubId) {
+        const hub = builtMap.get(d._hubId) || existingMap.get(d._hubId);
+        d.x = hub ? hub.x + (Math.random()-0.5)*28 : cx;
+        d.y = hub ? hub.y + (Math.random()-0.5)*28 : cy;
+      } else if (d._spawnX !== undefined) {
+        d.x = d._spawnX; d.y = d._spawnY;
+      } else if (d.x === undefined) {
+        d.x = cx; d.y = cy;
+      }
+      d.vx = 0; d.vy = 0;
+      // Preserve float parameters if not set
+      if (d.type === 'memory' && d._floatPhase === undefined) {
+        d._floatPhase = Math.random()*Math.PI*2;
+        d._floatAmp   = 1 + Math.random()*2;
+      }
+      newNodes.push(d);
+      builtMap.set(d.id, d);
+      addedCount++;
+    }
+  }
+
+  SB.nodes = newNodes;
+  SB.edges = desiredEdges;
+
+  // Replenish physics frames when the graph changes
+  if (addedCount > 0 || SB.activeFrames === 0) {
+    SB.activeFrames = Math.max(SB.activeFrames, addedCount > 0 ? 500 : 60);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   FORCE SIMULATION
+═══════════════════════════════════════════════════════ */
+function applyForces() {
+  if (SB.mode === 'bank') { applyBankForces(); return; }
+  const nodes = SB.nodes;
+  if (!nodes.length) return;
+  const canvas = document.getElementById('sb-canvas');
+  const cx = canvas.width/2, cy = canvas.height/2;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const a = nodes[i]; if (a.fixed) continue;
+    for (let j = i+1; j < nodes.length; j++) {
+      const b = nodes[j]; if (b.fixed) continue;
+      const dx = a.x-b.x, dy = a.y-b.y;
+      const d2 = dx*dx+dy*dy+1, fd = Math.sqrt(d2);
+      const f  = REPULSION/d2;
+      a.vx += (dx/fd)*f; a.vy += (dy/fd)*f;
+      b.vx -= (dx/fd)*f; b.vy -= (dy/fd)*f;
+    }
+  }
+
+  const nodeMap = new Map(nodes.map(n=>[n.id,n]));
+  for (const e of SB.edges) {
+    const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+    if (!a||!b) continue;
+    const dx = b.x-a.x, dy = b.y-a.y;
+    const len = Math.sqrt(dx*dx+dy*dy)||1;
+    const target  = e.type==='axis' ? HUB_R : MEM_TARGET;
+    const stretch = (len-target)*SPRING;
+    const fx = (dx/len)*stretch, fy = (dy/len)*stretch;
+    if (!a.fixed) { a.vx+=fx; a.vy+=fy; }
+    if (!b.fixed) { b.vx-=fx; b.vy-=fy; }
+  }
+
+  for (const n of nodes) {
+    if (n.fixed) continue;
+    n.vx += (cx-n.x)*CENTER_G; n.vy += (cy-n.y)*CENTER_G;
+    if (n.type==='dimension') { n.vx+=(n.fixedX-n.x)*0.15; n.vy+=(n.fixedY-n.y)*0.15; }
+  }
+
+  for (const n of nodes) {
+    if (n.fixed||n===SB.drag) continue;
+    n.vx*=DAMP; n.vy*=DAMP;
+    const spd = Math.hypot(n.vx,n.vy);
+    if (spd>MAX_VEL) { n.vx=(n.vx/spd)*MAX_VEL; n.vy=(n.vy/spd)*MAX_VEL; }
+    n.x+=n.vx; n.y+=n.vy;
+  }
+}
+
+function applyBankForces() {
+  const nodes = SB.nodes; if (!nodes.length) return;
+  const canvas = document.getElementById('sb-canvas');
+  const cx = canvas.width/2, cy = canvas.height/2;
+
+  for (let i=0;i<nodes.length;i++) {
+    const a=nodes[i];
+    for (let j=i+1;j<nodes.length;j++) {
+      const b=nodes[j];
+      const dx=a.x-b.x, dy=a.y-b.y;
+      const d2=dx*dx+dy*dy+1, fd=Math.sqrt(d2);
+      const f=BANK_REPULSION/d2;
+      a.vx+=(dx/fd)*f; a.vy+=(dy/fd)*f;
+      b.vx-=(dx/fd)*f; b.vy-=(dy/fd)*f;
+    }
+  }
+
+  const nodeMap = new Map(nodes.map(n=>[n.id,n]));
+  for (const e of SB.edges) {
+    const a=nodeMap.get(e.source), b=nodeMap.get(e.target);
+    if (!a||!b) continue;
+    const dx=b.x-a.x, dy=b.y-a.y;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const stretch=(len-200)*BANK_SPRING;
+    const fx=(dx/len)*stretch, fy=(dy/len)*stretch;
+    a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy;
+  }
+
+  for (const n of nodes) {
+    n.vx+=(cx-n.x)*CENTER_G; n.vy+=(cy-n.y)*CENTER_G;
+    n.vx*=BANK_DAMP; n.vy*=BANK_DAMP;
+    const spd=Math.hypot(n.vx,n.vy);
+    if (spd>MAX_VEL) { n.vx=(n.vx/spd)*MAX_VEL; n.vy=(n.vy/spd)*MAX_VEL; }
+    if (n!==SB.drag) { n.x+=n.vx; n.y+=n.vy; }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   CANVAS RENDER
+═══════════════════════════════════════════════════════ */
+function sbRender() {
+  const canvas = document.getElementById('sb-canvas');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  _pulseT += 0.028;
+
+  // ── Background ──
+  const bg = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W,H)*0.8);
+  bg.addColorStop(0, '#0d1020');
+  bg.addColorStop(1, '#060810');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // subtle dot-grid
+  ctx.fillStyle = 'rgba(255,255,255,0.025)';
+  const gs = 36;
+  for (let gx = gs/2; gx < W; gx += gs)
+    for (let gy = gs/2; gy < H; gy += gs)
+      ctx.fillRect(gx, gy, 1, 1);
+
+  if (!SB.nodes.length) return;
+
+  ctx.save();
+  ctx.translate(W/2+SB.offsetX, H/2+SB.offsetY);
+  ctx.scale(SB.scale, SB.scale);
+  ctx.translate(-W/2, -H/2);
+
+  // ── Edges ──
+  const nodeMap = new Map(SB.nodes.map(n=>[n.id,n]));
+  for (const e of SB.edges) {
+    const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+    if (!a||!b) continue;
+
+    if (e.type === 'axis') {
+      // Gradient axis lines
+      const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+      grad.addColorStop(0, 'rgba(255,255,255,0.04)');
+      grad.addColorStop(0.5, e.color);
+      grad.addColorStop(1, 'rgba(255,255,255,0.04)');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([]);
+    } else if (e.type === 'conversation') {
+      ctx.strokeStyle = e.color;
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([5,5]);
+    } else {
+      ctx.strokeStyle = e.color;
+      ctx.lineWidth = 0.6;
+      ctx.setLineDash([]);
+    }
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // ── Nodes ──
+  for (const n of SB.nodes) {
+    const isHover  = SB.hoverNode === n;
+    const floatOff = n._floatPhase != null
+      ? Math.sin(_pulseT*0.9 + n._floatPhase) * (n._floatAmp||1.5)
+      : 0;
+    const drawX = n.x;
+    const drawY = n.y + floatOff;
+
+    // ── Outer glow ──
+    let glowPulse = 0;
+    if (n.type === 'agent') {
+      // always-breathing pulse on center node
+      glowPulse = 10 + Math.sin(_pulseT)*8;
+      if (n.inFlight) glowPulse += 6 + Math.sin(_pulseT*2)*4;
+    } else if (n.type === 'bank_agent') {
+      glowPulse = n.inFlight ? 8 + Math.sin(_pulseT*2)*4 : 5;
+    } else {
+      glowPulse = 3;
+    }
+
+    const glowR = n.radius + glowPulse;
+    const g = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, glowR);
+    const alpha = n.type === 'agent'
+      ? (0.35 + Math.sin(_pulseT)*0.15)
+      : 0.25;
+    g.addColorStop(0, n.color + Math.round(alpha*255).toString(16).padStart(2,'0'));
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(drawX, drawY, glowR, 0, Math.PI*2);
+    ctx.fill();
+
+    // ── Node body ──
+    const bodyR = n.radius + (isHover ? 2.5 : 0);
+    ctx.beginPath();
+    ctx.arc(drawX, drawY, bodyR, 0, Math.PI*2);
+
+    if (n.type === 'memory') {
+      ctx.fillStyle = n.color + 'b0';
+    } else {
+      ctx.fillStyle = n.color;
+    }
+    ctx.fill();
+
+    if (n.type !== 'memory') {
+      ctx.strokeStyle = n.color;
+      ctx.lineWidth = n.type === 'agent' ? 1.5 : 1;
+      ctx.stroke();
+      // inner ring for agent node
+      if (n.type === 'agent') {
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, bodyR - 5, 0, Math.PI*2);
+        ctx.strokeStyle = n.color + '55';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+
+    // ── Labels ──
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+    if (n.type === 'dimension') {
+      ctx.fillStyle = n.color;
+      ctx.font = `bold 8px 'Share Tech Mono',monospace`;
+      const cnt = n.count ? ` (${n.count})` : '';
+      ctx.fillText(n.label+cnt, drawX, drawY + n.radius + 10);
+    } else if (n.type === 'agent' || n.type === 'bank_agent') {
+      ctx.fillStyle = '#fff';
+      ctx.font = `600 10px 'Inter',sans-serif`;
+      const short = n.label.length > 10 ? n.label.slice(0,9)+'…' : n.label;
+      ctx.fillText(short, drawX, drawY);
+      if (n.inFlight) {
+        ctx.save();
+        ctx.translate(drawX + n.radius + 7, drawY - n.radius - 3);
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = `9px 'Share Tech Mono',monospace`;
+        ctx.fillText('⟳', 0, 0);
+        ctx.restore();
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+// Single continuous loop — never cancelled after first start.
+// Physics runs while activeFrames > 0, render always runs.
+function sbEnsureLoop() {
+  if (SB.rafId) return;   // already running
+  function loop() {
+    if (SB.activeFrames > 0) {
+      applyForces();
+      SB.activeFrames--;
+    }
+    sbRender();
+    SB.rafId = requestAnimationFrame(loop);
+  }
+  SB.rafId = requestAnimationFrame(loop);
+}
+
+function sbResetView() { SB.offsetX=0; SB.offsetY=0; SB.scale=1; }
+
+function sbResizeCanvas() {
+  const canvas = document.getElementById('sb-canvas');
+  const wrap   = document.getElementById('canvas-wrap');
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+
+function updateSBStatus() {
+  const memCount  = SB.nodes.filter(n=>n.type==='memory').length;
+  const agentName = SB.mode==='agent'
+    ? (liveData.agents.find(a=>a.id===SB.selectedId)?.name||'—')
+    : (SB.mode==='bank' ? 'ALL AGENTS' : '—');
+  document.getElementById('sb-status-agent').textContent  = agentName;
+  document.getElementById('sb-status-counts').textContent = SB.mode==='agent'
+    ? `${memCount} memory nodes` : `${SB.nodes.length} agent nodes`;
+}
+
+function buildLegend() {
+  const el = document.getElementById('sb-legend');
+  el.innerHTML = `<div class="legend-title">DIMENSIONS</div>` +
+    DIMS.map(d => `<div class="legend-row">
+      <div class="legend-dot" style="background:${d.color};box-shadow:0 0 5px ${d.color}88"></div>
+      <span class="legend-lbl" style="color:${d.color}">${d.label}</span>
+    </div>`).join('');
+}
+
+/* ═══════════════════════════════════════════════════════
+   CANVAS INTERACTION
+═══════════════════════════════════════════════════════ */
+const tooltip = document.getElementById('sb-tooltip');
+
+function sbWorldPos(ex, ey) {
+  const canvas = document.getElementById('sb-canvas');
+  const rect   = canvas.getBoundingClientRect();
+  const W = canvas.width, H = canvas.height;
+  return {
+    x: (ex-rect.left-W/2-SB.offsetX)/SB.scale+W/2,
+    y: (ey-rect.top -H/2-SB.offsetY)/SB.scale+H/2,
+  };
+}
+
+function hitNode(ex, ey) {
+  const {x,y} = sbWorldPos(ex, ey);
+  return SB.nodes.find(n => Math.hypot(n.x-x, n.y-y) <= n.radius+5) || null;
+}
+
+document.getElementById('sb-canvas').addEventListener('mousedown', e => {
+  const node = hitNode(e.clientX, e.clientY);
+  if (node) { SB.drag = node; e.preventDefault(); }
+  else {
+    SB.panning = true;
+    SB.panStartX=e.clientX; SB.panStartY=e.clientY;
+    SB.panBaseX=SB.offsetX; SB.panBaseY=SB.offsetY;
+    document.getElementById('sb-canvas').classList.add('grabbing');
+  }
+});
+
+document.addEventListener('mousemove', e => {
+  if (SB.drag) {
+    const pos=sbWorldPos(e.clientX,e.clientY);
+    SB.drag.x=pos.x; SB.drag.y=pos.y; SB.drag.vx=0; SB.drag.vy=0; return;
+  }
+  if (SB.panning) {
+    SB.offsetX=SB.panBaseX+(e.clientX-SB.panStartX);
+    SB.offsetY=SB.panBaseY+(e.clientY-SB.panStartY); return;
+  }
+  const canvas=document.getElementById('sb-canvas');
+  const rect=canvas.getBoundingClientRect();
+  if (e.clientX>=rect.left&&e.clientX<=rect.right&&e.clientY>=rect.top&&e.clientY<=rect.bottom) {
+    const node=hitNode(e.clientX,e.clientY);
+    SB.hoverNode=node;
+    if (node&&(node.type==='memory'||node.type==='bank_agent')) {
+      document.getElementById('tt-title').textContent = node.label||node.type;
+      document.getElementById('tt-type').textContent  = node.dim ? `DIM: ${node.dim.toUpperCase()}` : (node.provider?.toUpperCase()||'');
+      document.getElementById('tt-body').textContent  = node.text||node.label||'';
+      tooltip.style.display='block';
+      tooltip.style.left=(e.clientX+14)+'px';
+      tooltip.style.top =(e.clientY-10)+'px';
+    } else { tooltip.style.display='none'; }
+  } else { tooltip.style.display='none'; }
+});
+
+document.addEventListener('mouseup', () => {
+  SB.drag=null; SB.panning=false;
+  document.getElementById('sb-canvas').classList.remove('grabbing');
+});
+
+document.getElementById('sb-canvas').addEventListener('wheel', e => {
+  e.preventDefault();
+  SB.scale = Math.max(0.2, Math.min(4, SB.scale*(e.deltaY<0?1.1:0.91)));
+}, { passive:false });
+
+document.getElementById('sb-canvas').addEventListener('dblclick', e => {
+  const node=hitNode(e.clientX,e.clientY);
+  if (node?.type==='bank_agent'&&node.agentId!=null) selectAgent(node.agentId);
+});
+
+/* ═══════════════════════════════════════════════════════
+   WORLD STATE
+═══════════════════════════════════════════════════════ */
+// Interpolated world grid positions
+const worldGridState = new Map(); // id → { cx, cy, tcx, tcy, color, isAI }
+let worldGridRaf = null;
+
+function renderWorldState() {
+  renderWorldGrid();
+  renderLaws();
+  renderAgentCards();
+  renderThreadFeed();
+}
+
+function renderWorldGrid() {
+  const canvas = document.getElementById('world-canvas');
+  const W = canvas.width, H = canvas.height;
+  const agents = liveData.agents.filter(a => typeof a.x==='number'&&typeof a.z==='number');
+
+  if (!agents.length) {
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#060810'; ctx.fillRect(0,0,W,H); return;
+  }
+
+  let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+  for (const a of agents) {
+    if (a.x<minX) minX=a.x; if (a.x>maxX) maxX=a.x;
+    if (a.z<minZ) minZ=a.z; if (a.z>maxZ) maxZ=a.z;
+  }
+  const pad=14;
+  const scale=Math.min((W-pad*2)/Math.max(maxX-minX,1),(H-pad*2)/Math.max(maxZ-minZ,1));
+  const toC=(x,z)=>({ cx:pad+(x-minX)*scale, cy:pad+(z-minZ)*scale });
+
+  // Update interpolation targets
+  for (const a of agents) {
+    const {cx:tcx,cy:tcy}=toC(a.x,a.z);
+    const ex=worldGridState.get(a.id);
+    if (ex) { ex.tcx=tcx; ex.tcy=tcy; ex.color=a.color; ex.isAI=a._isAIDriven; }
+    else worldGridState.set(a.id,{cx:tcx,cy:tcy,tcx,tcy,color:a.color||'#aef7ff',isAI:a._isAIDriven});
+  }
+  for (const id of worldGridState.keys()) {
+    if (!agents.find(a=>a.id===id)) worldGridState.delete(id);
+  }
+
+  // Structures (toC uses current transform)
+  function drawFrame() {
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#060810'; ctx.fillRect(0,0,W,H);
+
+    // grid lines
+    ctx.strokeStyle='rgba(255,255,255,0.03)'; ctx.lineWidth=0.5;
+    const gridStep=scale*10;
+    for (let x=pad;x<W;x+=gridStep) { ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke(); }
+    for (let y=pad;y<H;y+=gridStep) { ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
+
+    // structures
+    for (const s of liveData.structures) {
+      if (typeof s.x!=='number') continue;
+      const {cx,cy}=toC(s.x,s.z);
+      ctx.fillStyle='rgba(0,245,255,0.07)'; ctx.fillRect(cx-3,cy-3,6,6);
+    }
+
+    // agents
+    for (const [id,st] of worldGridState) {
+      const r = st.isAI ? 5 : 3;
+      ctx.beginPath(); ctx.arc(st.cx,st.cy,r,0,Math.PI*2);
+      ctx.fillStyle = st.color;
+      ctx.globalAlpha = st.isAI ? 1 : 0.5;
+      ctx.fill(); ctx.globalAlpha=1;
+      if (st.isAI) {
+        ctx.beginPath(); ctx.arc(st.cx,st.cy,r+2,0,Math.PI*2);
+        ctx.strokeStyle=st.color+'44'; ctx.lineWidth=1; ctx.stroke();
+      }
+    }
+  }
+
+  // Lerp animation loop
+  if (worldGridRaf) cancelAnimationFrame(worldGridRaf);
+  let frames=0;
+  function animate() {
+    let moving=false;
+    for (const st of worldGridState.values()) {
+      const dx=st.tcx-st.cx, dy=st.tcy-st.cy;
+      if (Math.abs(dx)>0.3||Math.abs(dy)>0.3) {
+        st.cx+=dx*0.14; st.cy+=dy*0.14; moving=true;
+      } else { st.cx=st.tcx; st.cy=st.tcy; }
+    }
+    drawFrame();
+    frames++;
+    if (moving||frames<20) worldGridRaf=requestAnimationFrame(animate);
+  }
+  worldGridRaf=requestAnimationFrame(animate);
+}
+
+function renderLaws() {
+  const el=document.getElementById('laws-list');
+  if (!liveData.activeLaws.length) {
+    el.innerHTML=`<div style="font-size:11px;color:var(--muted)">No active laws</div>`; return;
+  }
+  el.innerHTML=liveData.activeLaws.map(law=>`
+    <div class="law-item">
+      <div>${esc(law.text||String(law))}</div>
+      ${law.proposedBy?`<div class="law-by">⚖ ${esc(law.proposedBy)}</div>`:''}
+    </div>`).join('');
+}
+
+let _cardPrevIds = [];
+let _cardPrevSnap = {};
+
+function _cardSnap(agent, cfg) {
+  const inFlight = !!(cfg?.inFlight);
+  const hpPct    = agent.maxHp>0?(agent.hp/agent.maxHp)*100:(agent.energy||0)*100;
+  const lastAction= cfg?.lastDecision?.action||agent._aiLastAction||'—';
+  const speech   = agent.speech&&agent.speechTimer>0?agent.speech:'';
+  const thought  = agent._aiThought||'';
+  const pos      = `${Math.round(agent.x)},${Math.round(agent.z)}`;
+  return `${agent.name}|${agent.color||''}|${pos}|${Math.round(hpPct)}|${lastAction}|${inFlight?1:0}|${speech.slice(0,120)}|${thought.slice(0,100)}|${agent.tier||0}|${agent.mode||''}`;
+}
+
+function _cardGetFields(agent, cfg) {
+  const prov     = cfg?.provider||'other';
+  const provCol  = PROVIDER_COLOR[prov]||'#94a3b8';
+  const provLabel= PROVIDER_LABEL[prov]||'AI';
+  const inFlight = !!(cfg?.inFlight);
+  const hpPct    = agent.maxHp>0?(agent.hp/agent.maxHp)*100:(agent.energy||0)*100;
+  const lastAction= cfg?.lastDecision?.action||agent._aiLastAction||'—';
+  const speech   = agent.speech&&agent.speechTimer>0?agent.speech:'';
+  const thought  = agent._aiThought||'';
+  const pos      = `${Math.round(agent.x)}, ${Math.round(agent.z)}`;
+  const hpColor  = hpPct>60?'var(--green)':hpPct>30?'var(--gold)':'var(--red)';
+  return { prov, provCol, provLabel, inFlight, hpPct, hpColor, lastAction, speech, thought, pos };
+}
+
+function _buildCardEl(agent, cfg) {
+  const f = _cardGetFields(agent, cfg);
+  const div = document.createElement('div');
+  div.className = 'agent-card' + (f.inFlight ? ' inflight' : '');
+  div.dataset.key = `card-${agent.id}`;
+  div.setAttribute('onclick', `selectAgent(${agent.id})`);
+  div.innerHTML = `<div class="card-name" style="color:${agent.color||f.provCol}">
+        ${esc(agent.name)}
+        <span class="card-badge" style="color:${f.provCol};border-color:${f.provCol}55;background:${f.provCol}11">${f.provLabel}</span>
+        ${f.inFlight?`<span class="card-thinking">⟳</span>`:''}
+      </div>
+      <div class="hp-bar-track"><div class="hp-bar-fill" data-f="hp" style="width:${Math.max(0,Math.min(100,f.hpPct)).toFixed(1)}%;background:${f.hpColor}"></div></div>
+      <div class="card-row"><span>POSITION</span><span class="card-val" data-f="pos" style="font-family:var(--font-mono)">${f.pos}</span></div>
+      <div class="card-row"><span>MODE / TIER</span><span class="card-val">${agent.mode||'—'} · <span style="color:${tierColor(agent.tier)}">T${agent.tier||'?'}</span></span></div>
+      <div class="card-row"><span>LAST ACTION</span><span class="card-val" data-f="act" style="color:var(--gold)">${esc(String(f.lastAction).slice(0,22))}</span></div>
+      <div class="card-speech-wrap" data-f="spw">${f.speech?`<div class="card-speech">"${esc(f.speech.slice(0,120))}"</div>`:''}</div>
+      <div class="card-thought-wrap" data-f="thw">${f.thought?`<div class="card-thought">💭 ${esc(f.thought.slice(0,100))}</div>`:''}</div>`;
+  return div;
+}
+
+function _updateCardEl(cardEl, agent, cfg) {
+  const f = _cardGetFields(agent, cfg);
+  // Update only the dynamic fields
+  const hp = cardEl.querySelector('[data-f="hp"]');
+  if (hp) { hp.style.width = Math.max(0,Math.min(100,f.hpPct)).toFixed(1)+'%'; hp.style.background = f.hpColor; }
+  const pos = cardEl.querySelector('[data-f="pos"]');
+  if (pos) pos.textContent = f.pos;
+  const act = cardEl.querySelector('[data-f="act"]');
+  if (act) act.textContent = String(f.lastAction).slice(0,22);
+  const spw = cardEl.querySelector('[data-f="spw"]');
+  if (spw) spw.innerHTML = f.speech ? `<div class="card-speech">"${esc(f.speech.slice(0,120))}"</div>` : '';
+  const thw = cardEl.querySelector('[data-f="thw"]');
+  if (thw) thw.innerHTML = f.thought ? `<div class="card-thought">💭 ${esc(f.thought.slice(0,100))}</div>` : '';
+  // inflight class toggle
+  cardEl.classList.toggle('inflight', f.inFlight);
+}
+
+function renderAgentCards() {
+  const el=document.getElementById('agent-cards');
+  const aiAgents=liveData.agents.filter(a=>a._isAIDriven);
+  if (!aiAgents.length) {
+    if (_cardPrevIds.length || !el.children.length) {
+      el.innerHTML=`<div style="font-size:11px;color:var(--muted);padding:20px">No AI agents active</div>`;
+      _cardPrevIds = []; _cardPrevSnap = {};
+    }
+    return;
+  }
+
+  const newIds = aiAgents.map(a => `card-${a.id}`);
+  const newSnap = {};
+  const agentMap = {};
+  for (const agent of aiAgents) {
+    const cfg = liveData.aiMap.get(agent.id);
+    const key = `card-${agent.id}`;
+    newSnap[key] = _cardSnap(agent, cfg);
+    agentMap[key] = { agent, cfg };
+  }
+
+  // Fast path: nothing changed
+  if (newIds.length === _cardPrevIds.length && newIds.every((id, i) => id === _cardPrevIds[i] && newSnap[id] === _cardPrevSnap[id])) {
+    return;
+  }
+
+  // Build map of existing card DOM nodes
+  const existingByKey = {};
+  for (const child of el.children) {
+    const k = child.dataset.key;
+    if (k) existingByKey[k] = child;
+  }
+
+  // If same IDs in same order, do in-place field updates only
+  const sameOrder = newIds.length === _cardPrevIds.length && newIds.every((id, i) => id === _cardPrevIds[i]);
+  if (sameOrder) {
+    for (const key of newIds) {
+      if (newSnap[key] !== _cardPrevSnap[key] && existingByKey[key]) {
+        _updateCardEl(existingByKey[key], agentMap[key].agent, agentMap[key].cfg);
+      }
+    }
+    _cardPrevSnap = newSnap;
+    return;
+  }
+
+  // Order changed — rebuild with reuse
+  const fragment = document.createDocumentFragment();
+  for (const key of newIds) {
+    if (existingByKey[key] && newSnap[key] === _cardPrevSnap[key]) {
+      fragment.appendChild(existingByKey[key]);
+    } else if (existingByKey[key]) {
+      _updateCardEl(existingByKey[key], agentMap[key].agent, agentMap[key].cfg);
+      fragment.appendChild(existingByKey[key]);
+    } else {
+      fragment.appendChild(_buildCardEl(agentMap[key].agent, agentMap[key].cfg));
+    }
+  }
+  el.textContent = '';
+  el.appendChild(fragment);
+
+  _cardPrevIds = newIds;
+  _cardPrevSnap = newSnap;
+}
+
+let _threadPrevCount = 0; // track how many messages we've rendered
+
+function _buildThreadMsgEl(m) {
+  const col      = m.speakerColor||'#aef7ff';
+  const initial  = (m.speakerName||'?')[0].toUpperCase();
+  const listener = m.listenerName
+    ? `<span class="tm-arrow">→</span><span style="color:${m.listenerColor||'#aef7ff'}">${esc(m.listenerName)}</span>`
+    : '';
+  const dayTime  = m.worldDay!=null?`Day ${m.worldDay}${m.worldTime?' · '+m.worldTime:''}`:'';
+  const text     = esc(m.text||'');
+  const needsClamp = (m.text||'').length > 150;
+  const div = document.createElement('div');
+  div.className = 'thread-msg';
+  div.innerHTML = `<div class="tm-avatar" style="color:${col};border-color:${col}55;background:${col}18">${initial}</div>
+    <div class="tm-content">
+      <div class="tm-bubble" style="border-left:2px solid ${col}44">
+        <div class="tm-header">
+          <span class="tm-speaker" style="color:${col}">${esc(m.speakerName||'?')}</span>
+          ${listener}
+        </div>
+        <div class="tm-text${needsClamp?' clamped':''}">${text}</div>
+        ${needsClamp?`<button class="tm-toggle" onclick="this.previousElementSibling.classList.toggle('clamped');this.textContent=this.previousElementSibling.classList.contains('clamped')?'read more ▾':'read less ▴'">read more ▾</button>`:''}
+        ${m.thought?`<div class="tm-thought">💭 ${esc(m.thought.slice(0,100))}</div>`:''}
+      </div>
+      <div class="tm-meta">${dayTime}</div>
+    </div>`;
+  return div;
+}
+
+function renderThreadFeed() {
+  const el=document.getElementById('thread-feed');
+  const msgs=liveData.thread; // chronological order from source
+  if (!msgs.length) {
+    if (_threadPrevCount !== 0) {
+      el.innerHTML=`<div style="font-size:10px;color:var(--muted);padding:14px">No messages yet</div>`;
+      _threadPrevCount = 0;
+    }
+    return;
+  }
+
+  // If source shrank (e.g., world reset), full rebuild
+  if (msgs.length < _threadPrevCount) {
+    el.textContent = '';
+    _threadPrevCount = 0;
+  }
+
+  // Only insert new messages (delta)
+  const newMsgs = msgs.slice(_threadPrevCount);
+  if (!newMsgs.length) return;
+
+  // Remove the "No messages" placeholder if present
+  if (_threadPrevCount === 0) el.textContent = '';
+
+  // Prepend new messages at top (newest first display = reversed chronological)
+  const firstChild = el.firstChild;
+  for (let i = newMsgs.length - 1; i >= 0; i--) {
+    const msgEl = _buildThreadMsgEl(newMsgs[i]);
+    el.insertBefore(msgEl, firstChild);
+  }
+
+  _threadPrevCount = msgs.length;
+}
+
+/* ═══════════════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════════════ */
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESIZE
+═══════════════════════════════════════════════════════ */
+function handleResize() {
+  sbResizeCanvas();
+  if (SB.mode==='agent'&&SB.selectedId!=null) {
+    const agent=liveData.agents.find(a=>a.id===SB.selectedId);
+    if (agent) buildAgentGraph(agent);
+  } else if (SB.mode==='bank') buildBankGraph();
+  renderWorldGrid();
+}
+window.addEventListener('resize', handleResize);
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════ */
+function init() {
+  sbResizeCanvas();
+  buildLegend();
+  sbEnsureLoop();
+  pollOpener();
+  setInterval(() => {
+    pollOpener();
+    if (activeTab==='world') renderWorldState();
+  }, POLL_MS);
+}
+
+init();
+</script>
+</body>
+</html>

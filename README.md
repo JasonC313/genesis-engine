@@ -68,6 +68,12 @@ Right-click `genesis-3d.html` and select "Open with Live Server"
 
 ---
 
+## Documentation
+
+For a complete walkthrough of the UI and all features, see the **[User Guide](USAGE.md)**.
+
+---
+
 ## API Keys
 
 Genesis Engine supports three AI providers. All are optional — the world runs without them, you just won't have conscious AI-driven agents.
